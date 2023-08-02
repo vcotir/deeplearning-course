@@ -107,3 +107,71 @@ demo.launch(share=True, server_port=int(os.environ['PORT2']))
 
 
 # BUILDING A NAMED ENTIT RECOGNITION APP
+
+'''
+    We are using this [Inference Endpoint](https://huggingface.co/inference-endpoints) for `dslim/bert-base-NER`, a 108M parameter fine-tuned BART model on the NER task.
+'''
+
+# Provides identification of entities
+API_URL = os.environ['HF_API_NER_BASE'] #NER endpoint
+text = "My name is Andrew, I'm building DeepLearningAI and I live in California"
+get_completion(text, parameters=None, ENDPOINT_URL= API_URL)
+
+
+# 
+def ner(input):
+    output = get_completion(input, parameters=None, ENDPOINT_URL=API_URL)
+    return {"text": input, "entities": output}
+
+gr.close_all()
+
+# What's different here, 
+    # Flag also set to false
+    # Examples are different
+demo = gr.Interface(fn=ner,
+                    inputs=[gr.Textbox(label="Text to find entities", lines=2)],
+                    outputs=[gr.HighlightedText(label="Text with entities")],
+                    title="NER with dslim/bert-base-NER",
+                    description="Find entities using the `dslim/bert-base-NER` model under the hood!",
+                    allow_flagging="never",
+                    #Here we introduce a new tag, examples, easy to use examples for your application
+                    examples=["My name is Andrew and I live in California", "My name is Poli and work at HuggingFace"])
+demo.launch(share=True, server_port=int(os.environ['PORT3']))
+
+
+# ---- MERGING ---
+def merge_tokens(tokens):
+    # Remove templates and join them as single string
+    merged_tokens = []
+    for token in tokens:
+        if merged_tokens and token['entity'].startswith('I-') and merged_tokens[-1]['entity'].endswith(token['entity'][2:]):
+            # If current token continues the entity of the last one, merge them
+            last_token = merged_tokens[-1]
+            last_token['word'] += token['word'].replace('##', '')
+            last_token['end'] = token['end']
+            last_token['score'] = (last_token['score'] + token['score']) / 2
+        else:
+            # Otherwise, add the token to the list
+            merged_tokens.append(token)
+
+    return merged_tokens
+
+def ner(input):
+    output = get_completion(input, parameters=None, ENDPOINT_URL=API_URL)
+    # 
+    merged_tokens = merge_tokens(output)
+    return {"text": input, "entities": merged_tokens}
+
+gr.close_all()
+demo = gr.Interface(fn=ner,
+                    inputs=[gr.Textbox(label="Text to find entities", lines=2)],
+                    outputs=[gr.HighlightedText(label="Text with entities")],
+                    title="NER with dslim/bert-base-NER",
+                    description="Find entities using the `dslim/bert-base-NER` model under the hood!",
+                    allow_flagging="never",
+                    examples=["My name is Andrew, I'm building DeeplearningAI and I live in California", "My name is Poli, I live in Vienna and work at HuggingFace"])
+
+demo.launch(share=True, server_port=int(os.environ['PORT4']))
+
+# Want to do this b/c Gradio opens alot of ports 
+gr.close_all()
